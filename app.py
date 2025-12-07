@@ -9,8 +9,8 @@ import plotly.graph_objects as go
 
 # ==================== CONFIGURATION ====================
 load_dotenv()
-API_URL = os.getenv("API_URL", "http://localhost:8000")
-API_KEY = os.getenv("API_KEY")
+API_URL = st.secrets.get("API_URL", "http://localhost:8000/api")
+API_KEY = st.secrets.get("API_KEY", "")
 
 
 st.set_page_config(
