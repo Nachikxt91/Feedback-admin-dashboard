@@ -1,6 +1,7 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
+import pytz
 import requests
 import streamlit as st
 from dotenv import load_dotenv
@@ -337,28 +338,19 @@ def render_header():
             <div class="dash-subtitle">Real-Time Intelligence Platform</div>
         </div>
         """, unsafe_allow_html=True)
+    
     with col2:
-        st.markdown("""
+        # Get IST time
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist).strftime("%H:%M:%S")
+        
+        st.markdown(f"""
         <div style="text-align: right; padding-top: 1rem;">
-            <div style="font-size: 0.7rem; color: #888; letter-spacing: 0.1em;">LOCAL TIME</div>
-            <div id="live-clock" style="font-size: 1.5rem; font-weight: 700; color: #00ffff; margin-top: 0.2rem;">
-                --:--:--
+            <div style="font-size: 0.7rem; color: #888; letter-spacing: 0.1em;">LOCAL TIME (IST)</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #00ffff; margin-top: 0.2rem;">
+                {current_time}
             </div>
         </div>
-        <script>
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit',
-                hour12: false
-            });
-            document.getElementById('live-clock').textContent = timeString;
-        }
-        updateClock();
-        setInterval(updateClock, 1000);
-        </script>
         """, unsafe_allow_html=True)
 
 
