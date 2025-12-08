@@ -338,14 +338,27 @@ def render_header():
         </div>
         """, unsafe_allow_html=True)
     with col2:
-        current_time = datetime.now().strftime("%H:%M:%S")
-        st.markdown(f"""
+        st.markdown("""
         <div style="text-align: right; padding-top: 1rem;">
-            <div style="font-size: 0.7rem; color: #888; letter-spacing: 0.1em;">SYSTEM TIME</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #00ffff; margin-top: 0.2rem;">
-                {current_time}
+            <div style="font-size: 0.7rem; color: #888; letter-spacing: 0.1em;">LOCAL TIME</div>
+            <div id="live-clock" style="font-size: 1.5rem; font-weight: 700; color: #00ffff; margin-top: 0.2rem;">
+                --:--:--
             </div>
         </div>
+        <script>
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit',
+                hour12: false
+            });
+            document.getElementById('live-clock').textContent = timeString;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+        </script>
         """, unsafe_allow_html=True)
 
 
