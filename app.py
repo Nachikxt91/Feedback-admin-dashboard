@@ -56,16 +56,49 @@ def normalize_sentiment(feedback):
     return feedback.get("sentiment", "Unknown").rstrip(".")
 
 
-def filter_feedbacks(feedbacks, rating_filter, sentiment_filter, search_query):
+def filter_feedbacks(feedbacks, rating_filter, sentiment_filter, category_filter, search_query):
     """Apply filters to feedback list"""
     return [
         fb for fb in feedbacks
         if fb["rating"] in rating_filter
         and normalize_sentiment(fb) in sentiment_filter
+        and fb.get("category", "General") in category_filter
         and (not search_query or 
              search_query.lower() in fb.get("review", "").lower() or
              search_query.lower() in fb.get("ai_summary", "").lower())
     ]
+
+
+def export_to_csv(feedbacks, selected_columns):
+    """Convert feedback list to CSV format for download with selected columns"""
+    if not feedbacks or not selected_columns:
+        return None
+    
+    export_data = []
+    for fb in feedbacks:
+        row = {}
+        if "ID" in selected_columns:
+            row["ID"] = fb.get("_id", "")
+        if "Rating" in selected_columns:
+            row["Rating"] = fb.get("rating", "")
+        if "Review" in selected_columns:
+            row["Review"] = fb.get("review", "")
+        if "Category" in selected_columns:
+            row["Category"] = fb.get("category", "General")
+        if "Sentiment" in selected_columns:
+            row["Sentiment"] = normalize_sentiment(fb)
+        if "AI Summary" in selected_columns:
+            row["AI Summary"] = fb.get("ai_summary", "")
+        if "AI Actions" in selected_columns:
+            row["AI Actions"] = fb.get("ai_actions", "")
+        if "AI Response" in selected_columns:
+            row["AI Response"] = fb.get("ai_response", "")
+        if "Created At" in selected_columns:
+            row["Created At"] = fb.get("created_at", "")
+        export_data.append(row)
+    
+    df = pd.DataFrame(export_data)
+    return df.to_csv(index=False).encode('utf-8')
 
 
 # ==================== CYBERPUNK THEME ====================
@@ -305,7 +338,7 @@ def apply_cyberpunk_theme():
     }
     
     .auth-title {
-        font-size: 2.5rem;
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
         font-weight: 700;
         color: #ffffff;
         text-align: center;
@@ -315,12 +348,120 @@ def apply_cyberpunk_theme():
     }
     
     .auth-subtitle {
-        font-size: 0.8rem;
+        font-size: clamp(0.65rem, 2vw, 0.8rem);
         color: #00ffff;
         text-align: center;
         text-transform: uppercase;
         letter-spacing: 0.3em;
         margin-bottom: 2rem;
+    }
+    
+    /* ===== RESPONSIVE BREAKPOINTS ===== */
+    
+    /* Tablets and below */
+    @media (max-width: 1024px) {
+        .block-container {
+            padding: 1.5rem 1.5rem 3rem 1.5rem !important;
+        }
+        
+        .dash-title {
+            font-size: clamp(1.5rem, 4vw, 2.5rem) !important;
+        }
+        
+        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+            font-size: 2rem !important;
+        }
+        
+        .stats-bar {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+    }
+    
+    /* Mobile phones */
+    @media (max-width: 768px) {
+        .block-container {
+            padding: 1rem 1rem 2rem 1rem !important;
+        }
+        
+        .dash-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+        }
+        
+        .dash-title {
+            font-size: 1.5rem !important;
+        }
+        
+        .dash-subtitle {
+            font-size: 0.7rem !important;
+            letter-spacing: 0.15em !important;
+        }
+        
+        div[data-testid="stMetric"] {
+            padding: 1rem !important;
+        }
+        
+        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+            font-size: 1.5rem !important;
+        }
+        
+        div[data-testid="stMetric"] label {
+            font-size: 0.6rem !important;
+        }
+        
+        .section-title {
+            font-size: 0.75rem !important;
+            padding-left: 0.75rem;
+        }
+        
+        .stats-bar {
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+        
+        .content-box, .terminal-box {
+            padding: 0.75rem;
+            font-size: 0.8rem;
+        }
+        
+        .streamlit-expanderHeader {
+            padding: 1rem !important;
+            font-size: 0.75rem !important;
+        }
+        
+        .streamlit-expanderContent {
+            padding: 1rem !important;
+        }
+        
+        .auth-card {
+            margin: 3rem 1rem;
+            padding: 2rem 1.5rem;
+        }
+        
+        .cyber-fab {
+            width: 50px;
+            height: 50px;
+            font-size: 1.25rem;
+            bottom: 1rem;
+            right: 1rem;
+        }
+    }
+    
+    /* Small phones */
+    @media (max-width: 480px) {
+        .block-container {
+            padding: 0.75rem 0.75rem 1.5rem 0.75rem !important;
+        }
+        
+        .dash-title {
+            font-size: 1.25rem !important;
+        }
+        
+        div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+            font-size: 1.25rem !important;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -338,6 +479,7 @@ def render_header():
         </div>
         """, unsafe_allow_html=True)
     with col2:
+        # Use a container that updates with each rerun
         current_time = datetime.now().strftime("%H:%M:%S")
         st.markdown(f"""
         <div style="text-align: right; padding-top: 1rem;">
@@ -380,76 +522,163 @@ def render_metrics(analytics):
 
 
 def render_charts(analytics):
-    """Render interactive charts"""
+    """Render interactive charts with improved visuals"""
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown('<div class="section-title">RATING DISTRIBUTION</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">⭐ RATING DISTRIBUTION</div>', unsafe_allow_html=True)
         rating_dist = analytics.get("rating_distribution", {})
         
-        if rating_dist:
-            ratings = list(map(int, rating_dist.keys()))
-            counts = list(rating_dist.values())
+        if rating_dist and any(rating_dist.values()):
+            # Create bar chart instead of radar for better clarity
+            ratings = [str(i) for i in range(1, 6)]
+            counts = [rating_dist.get(str(i), 0) for i in range(1, 6)]
             
-            fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=counts + [counts[0]],
-                theta=[f'{r} STARS' for r in ratings] + [f'{ratings[0]} STARS'],
-                fill='toself',
-                fillcolor='rgba(0, 255, 255, 0.2)',
-                line=dict(color='#00ffff', width=2)
+            # Gradient colors from red to green
+            colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e']
+            
+            fig = go.Figure(go.Bar(
+                x=ratings,
+                y=counts,
+                marker=dict(
+                    color=colors,
+                    line=dict(color='rgba(255,255,255,0.2)', width=1)
+                ),
+                text=counts,
+                textposition='outside',
+                textfont=dict(color='#ffffff', size=14, family='JetBrains Mono')
             ))
             
             fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(visible=True, showline=False, showticklabels=False),
-                    bgcolor='rgba(15, 15, 35, 0.6)'
-                ),
-                showlegend=False,
-                margin=dict(l=20, r=20, t=20, b=20),
+                height=280,
+                margin=dict(l=40, r=20, t=30, b=40),
                 paper_bgcolor='rgba(0,0,0,0)',
-                height=300
+                plot_bgcolor='rgba(15, 15, 35, 0.4)',
+                font={'color': "#888", 'family': "JetBrains Mono"},
+                xaxis=dict(
+                    title="Stars",
+                    showgrid=False,
+                    tickfont=dict(color='#00ffff', size=12)
+                ),
+                yaxis=dict(
+                    showgrid=True,
+                    gridcolor='rgba(0, 255, 255, 0.1)',
+                    tickfont=dict(color='#888')
+                ),
+                bargap=0.3
             )
             
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        else:
+            st.info("No rating data available yet")
     
     with col2:
-        st.markdown('<div class="section-title">SENTIMENT ANALYSIS</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">💭 SENTIMENT BREAKDOWN</div>', unsafe_allow_html=True)
         sentiment_data = analytics.get("sentiment_breakdown", {})
         
-        if sentiment_data:
-            total_fb = analytics.get("total_feedback", 1)
-            positive_rate = (sentiment_data.get("Positive", 0) / total_fb) * 100
+        if sentiment_data and any(sentiment_data.values()):
+            # Pie/Donut chart for sentiment
+            labels = list(sentiment_data.keys())
+            values = list(sentiment_data.values())
             
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=positive_rate,
-                gauge={
-                    'axis': {'range': [0, 100], 'tickcolor': "#00ffff"},
-                    'bar': {'color': "#00ffff"},
-                    'bgcolor': "rgba(15, 15, 35, 0.6)",
-                    'bordercolor': "#00ffff",
-                    'steps': [
-                        {'range': [0, 33], 'color': 'rgba(255, 0, 0, 0.3)'},
-                        {'range': [33, 66], 'color': 'rgba(255, 255, 0, 0.3)'},
-                        {'range': [66, 100], 'color': 'rgba(0, 255, 0, 0.3)'}
-                    ]
-                }
+            # Sentiment colors
+            color_map = {
+                'Positive': '#22c55e',
+                'Neutral': '#eab308', 
+                'Negative': '#ef4444',
+                'Unknown': '#6b7280'
+            }
+            colors = [color_map.get(l, '#6b7280') for l in labels]
+            
+            fig = go.Figure(go.Pie(
+                labels=labels,
+                values=values,
+                hole=0.6,
+                marker=dict(colors=colors, line=dict(color='#1a1a2e', width=2)),
+                textinfo='label+percent',
+                textfont=dict(color='#ffffff', size=11, family='JetBrains Mono'),
+                hovertemplate='%{label}: %{value} (%{percent})<extra></extra>'
             ))
             
             fig.update_layout(
-                height=300,
+                height=280,
                 margin=dict(l=20, r=20, t=20, b=20),
                 paper_bgcolor='rgba(0,0,0,0)',
-                font={'color': "#ffffff", 'family': "JetBrains Mono"}
+                font={'color': "#ffffff", 'family': "JetBrains Mono"},
+                showlegend=False,
+                annotations=[dict(
+                    text=f"{sum(values)}<br>Total",
+                    x=0.5, y=0.5,
+                    font=dict(size=18, color='#00ffff', family='JetBrains Mono'),
+                    showarrow=False
+                )]
             )
             
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        else:
+            st.info("No sentiment data available yet")
+    
+    # Category Distribution Chart
+    st.markdown('<div class="section-title">📂 CATEGORY BREAKDOWN</div>', unsafe_allow_html=True)
+    category_data = analytics.get("category_distribution", {})
+    
+    if category_data and any(category_data.values()):
+        categories = list(category_data.keys())
+        cat_counts = list(category_data.values())
+        
+        # Modern gradient colors
+        cat_colors = {
+            "General": "#6366f1",      # Indigo
+            "Bug Report": "#ef4444",   # Red
+            "Feature Request": "#22c55e",  # Green
+            "Praise": "#f59e0b",       # Amber
+            "Complaint": "#f97316",    # Orange
+            "Suggestion": "#8b5cf6"    # Purple
+        }
+        colors = [cat_colors.get(cat, "#6b7280") for cat in categories]
+        
+        fig = go.Figure(go.Bar(
+            x=categories,
+            y=cat_counts,
+            marker=dict(
+                color=colors,
+                line=dict(color='rgba(255,255,255,0.1)', width=1)
+            ),
+            text=cat_counts,
+            textposition='outside',
+            textfont=dict(color='#ffffff', size=12, family='JetBrains Mono')
+        ))
+        
+        fig.update_layout(
+            height=220,
+            margin=dict(l=40, r=20, t=20, b=60),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(15, 15, 35, 0.4)',
+            font={'color': "#888", 'family': "JetBrains Mono"},
+            xaxis=dict(
+                showgrid=False,
+                tickangle=-30,
+                tickfont=dict(color='#00ffff', size=10)
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(0, 255, 255, 0.08)',
+                tickfont=dict(color='#888')
+            ),
+            bargap=0.25
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("No category data available yet")
 
+
+# Available categories
+CATEGORIES = ["General", "Bug Report", "Feature Request", "Praise", "Complaint", "Suggestion"]
 
 def render_filters():
     """Render filter panel and return filter values"""
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         rating_filter = st.multiselect(
@@ -469,6 +698,14 @@ def render_filters():
         )
     
     with col3:
+        category_filter = st.multiselect(
+            "CATEGORY FILTER",
+            options=CATEGORIES,
+            default=CATEGORIES,
+            key="category_filter"
+        )
+    
+    with col4:
         date_range = st.date_input(
             "DATE RANGE",
             value=(datetime.now().date(), datetime.now().date()),
@@ -476,33 +713,48 @@ def render_filters():
             label_visibility="visible"
         )
     
-    with col4:
+    with col5:
         search_query = st.text_input(
             "SEARCH",
-            placeholder="ENTER KEYWORDS...",
+            placeholder="KEYWORDS...",
             key="search_filter",
             label_visibility="visible"
         )
     
-    return rating_filter, sentiment_filter, search_query
+    return rating_filter, sentiment_filter, category_filter, search_query
 
 
 def render_feedback_item(feedback, idx):
-    """Render individual feedback item"""
+    """Render individual feedback item with classification badge"""
     sentiment = normalize_sentiment(feedback)
+    category = feedback.get("category", "General")
     sentiment_colors = {
-        "Positive": "#00ff00",
-        "Neutral": "#ffff00",
-        "Negative": "#ff0000",
-        "Unknown": "#888888"
+        "Positive": "#22c55e",
+        "Neutral": "#eab308",
+        "Negative": "#ef4444",
+        "Unknown": "#6b7280"
     }
     
+    sentiment_color = sentiment_colors.get(sentiment, "#6b7280")
     rating_display = f"{feedback['rating']} STARS"
     
+    # Create badge for classification
+    classification_badge = f"""
+    <span style="background: {sentiment_color}22; color: {sentiment_color}; 
+         padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.7rem; 
+         font-weight: 600; border: 1px solid {sentiment_color}55; 
+         margin-left: 0.5rem; letter-spacing: 0.05em;">
+        {sentiment.upper()}
+    </span>
+    """
+    
     with st.expander(
-        f"[ {rating_display} ] {sentiment.upper()} • {feedback['created_at'][:10]}",
+        f"[ {rating_display} ] {category} • {feedback['created_at'][:10]}",
         expanded=False
     ):
+        # Add classification badge at the top of expander
+        st.markdown(f'<div style="margin-bottom: 1rem;">{classification_badge}</div>', unsafe_allow_html=True)
+        
         col_a, col_b = st.columns([3, 2])
         
         with col_a:
@@ -519,7 +771,6 @@ def render_feedback_item(feedback, idx):
             rating_display_full = "★" * feedback["rating"] + "☆" * (5 - feedback["rating"])
             st.markdown(f'<div style="font-size: 1.2rem; color: #ffff00;">{rating_display_full}</div>', unsafe_allow_html=True)
             
-            sentiment_color = sentiment_colors.get(sentiment, "#888888")
             st.markdown(f"""
             <div style="background: rgba(0, 255, 0, 0.1); border-left: 3px solid {sentiment_color};
                      padding: 0.75rem; border-radius: 6px; margin: 1rem 0;">
@@ -536,39 +787,17 @@ def render_feedback_item(feedback, idx):
         st.markdown(f'<div class="content-box" style="color: #aaaaaa;">{ai_response}</div>', unsafe_allow_html=True)
 
 
+
 def render_sidebar():
     """Render sidebar controls"""
     with st.sidebar:
         st.markdown("""
-        <div style="border-bottom: 1px solid rgba(0, 255, 255, 0.3); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+        <div style="border-bottom: 1px solid rgba(0, 255, 255, 0.3); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
             <div style="font-size: 1rem; font-weight: 700; color: #00ffff;">CONTROL PANEL</div>
             <div style="font-size: 0.7rem; color: #888;">SYSTEM CONFIGURATION</div>
         </div>
         """, unsafe_allow_html=True)
-        
-        with st.expander("SYSTEM SETTINGS", expanded=False):
-            auto_refresh = st.toggle(
-                "AUTO-REFRESH",
-                value=False,
-                key="auto_refresh_toggle"
-            )
-            if auto_refresh:
-                st.slider(
-                    "REFRESH RATE (SECONDS)",
-                    min_value=10,
-                    max_value=300,
-                    value=60,
-                    key="refresh_rate_slider"
-                )
-            st.slider(
-                "MAX RECORDS",
-                min_value=50,
-                max_value=1000,
-                value=100,
-                key="max_records_slider"
-            )
-        
-        st.markdown("---")
+
         
         st.markdown(f"""
         <div style="background: rgba(15, 15, 35, 0.6); border: 1px solid rgba(0, 255, 255, 0.2);
@@ -609,21 +838,26 @@ def render_auth_screen():
     
     col1, col2, col3 = st.columns([0.5, 3, 0.5])
     with col2:
-        api_key_input = st.text_input(
-            "API Key",
-            type="password",
-            placeholder="ENTER ACCESS KEY",
-            label_visibility="collapsed"
-        )
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        if st.button("AUTHENTICATE", type="primary", use_container_width=True):
-            if api_key_input == API_KEY:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("ACCESS DENIED - INVALID CREDENTIALS")
+        # Use form to enable Enter key submission
+        with st.form(key="auth_form", clear_on_submit=False):
+            api_key_input = st.text_input(
+                "API Key",
+                type="password",
+                placeholder="ENTER ACCESS KEY",
+                label_visibility="collapsed",
+                key="api_key_input"
+            )
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            submit_button = st.form_submit_button("AUTHENTICATE", type="primary", use_container_width=True)
+            
+            if submit_button:
+                if api_key_input == API_KEY:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("ACCESS DENIED - INVALID CREDENTIALS")
     
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -634,10 +868,23 @@ def main():
     # Apply theme
     apply_cyberpunk_theme()
     
-    # FAB button
-    st.markdown("""
-    <button class="cyber-fab" onclick="window.location.reload()" title="SYNC DATA">↻</button>
-    """, unsafe_allow_html=True)
+    # Auto-refresh logic (disabled by default for better control)
+    if st.session_state.get("authenticated", False):
+        try:
+            from streamlit_autorefresh import st_autorefresh
+            # Only enable if user wants auto-refresh
+            enable_autorefresh = st.sidebar.toggle("AUTO-REFRESH", value=False, key="enable_autorefresh")
+            if enable_autorefresh:
+                # refresh_interval in milliseconds (10s to 300s)
+                refresh_rate = st.sidebar.slider("REFRESH RATE (SEC)", 10, 300, 30, key="refresh_rate_slider")
+                st_autorefresh(interval=refresh_rate * 1000, key="data_refresh")
+        except ImportError:
+            st.sidebar.warning("Install 'streamlit-autorefresh' for auto-updates")
+            if st.sidebar.button("REFRESH DATA"):
+                st.rerun()
+
+    # Manual Refresh Button (Floating style workaround not needed, sidebar has controls)
+    # Using sidebar for primary actions to keep UI clean
     
     # Authentication check
     if "authenticated" not in st.session_state:
@@ -661,17 +908,23 @@ def main():
     
     # Feedback section
     st.markdown('<div class="neon-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">FEEDBACK STREAM</div>', unsafe_allow_html=True)
+    
+    # Feedback section header with export button
+    col_header1, col_header2 = st.columns([3, 1])
+    with col_header1:
+        st.markdown('<div class="section-title">FEEDBACK STREAM</div>', unsafe_allow_html=True)
+    with col_header2:
+        pass  # Export button will be added after feedbacks are fetched
     
     feedbacks = fetch_feedbacks()
     if feedbacks:
         feedbacks = sorted(feedbacks, key=lambda x: x.get("created_at", ""), reverse=True)
         
         # Filters
-        rating_filter, sentiment_filter, search_query = render_filters()
+        rating_filter, sentiment_filter, category_filter, search_query = render_filters()
         
         # Apply filters
-        filtered_feedbacks = filter_feedbacks(feedbacks, rating_filter, sentiment_filter, search_query)
+        filtered_feedbacks = filter_feedbacks(feedbacks, rating_filter, sentiment_filter, category_filter, search_query)
         
         # Stats bar
         st.markdown(f"""
@@ -681,6 +934,40 @@ def main():
             <div class="stats-label">UPDATED: <span class="stats-value">{datetime.now().strftime('%H:%M:%S')}</span></div>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Export section with column selection
+        st.markdown("---")
+        
+        # Column selector (full width for better visibility)
+        available_columns = ["ID", "Rating", "Review", "Category", "Sentiment", 
+                            "AI Summary", "AI Actions", "AI Response", "Created At"]
+        selected_columns = st.multiselect(
+            "📋 SELECT COLUMNS TO EXPORT",
+            options=available_columns,
+            default=["Rating", "Review", "Category", "Sentiment", "Created At"],
+            key="export_columns",
+            help="Choose which fields to include in your CSV export"
+        )
+        
+        # Export button
+        csv_data = export_to_csv(filtered_feedbacks, selected_columns)
+        if csv_data and selected_columns:
+            st.download_button(
+                label="📥 EXPORT REVIEWS",
+                data=csv_data,
+                file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="export_button",
+                use_container_width=False,
+                type="primary"
+            )
+        elif not selected_columns:
+            st.warning("⚠️ Please select at least one column to export")
+        
+        st.markdown("---")
+
+        
+
         
         # Render feedback items
         for idx, feedback in enumerate(filtered_feedbacks[:20]):
